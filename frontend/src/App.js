@@ -3,16 +3,13 @@ import axios from "axios";
 import './App.css';
 
 axios.defaults.baseURL = "http://localhost:5000/api";
-axios.defaults.timeout = 5000;
 
 function App() {
   const [page, setPage] = useState("inscription");
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    axios.get("/profile")
-      .then(res => setUser(res.data.user))
-      .catch(() => setUser(null));
+    axios.get("/profile").then(res => setUser(res.data.user)).catch(() => setUser(null));
   }, []);
 
   const logout = async () => {
@@ -28,7 +25,7 @@ function App() {
           <button onClick={() => setPage("inscription")}>📝 Inscription</button>
           <button onClick={() => setPage("connexion")}>🔐 Connexion</button>
           <button onClick={() => setPage("profil")}>👤 Profil</button>
-          <button onClick={() => setPage("admin")}>⚙️ Admin</button>
+          {user?.type === "admin" && <button onClick={() => setPage("admin")}>⚙️ Admin</button>}
         </div>
         {user && (
           <div className="user-info-nav">
@@ -42,14 +39,16 @@ function App() {
         {page === "inscription" && <RegisterPage />}
         {page === "connexion" && <LoginPage onLogin={setUser} />}
         {page === "profil" && <ProfilePage user={user} onLogout={logout} />}
-        {page === "admin" && <AdminPage />}
+        {page === "admin" && user?.type === "admin" && <AdminPage />}
       </div>
     </div>
   );
 }
 
+// ----------------- Composants -------------------
+
 function RegisterPage() {
-  const [data, setData] = useState({ name: "", email: "", password: "" });
+  const [data, setData] = useState({ name: "", email: "", password: "", city: "" });
   const [loading, setLoading] = useState(false);
 
   const submit = async e => {
@@ -58,7 +57,7 @@ function RegisterPage() {
     try {
       const res = await axios.post("/register", data);
       alert(res.data.message);
-      setData({ name: "", email: "", password: "" });
+      setData({ name: "", email: "", password: "", city: "" });
     } catch (e) {
       alert(e.response?.data?.message || "Erreur d'inscription");
     }
@@ -72,6 +71,7 @@ function RegisterPage() {
         <input placeholder="Nom complet" value={data.name} onChange={e => setData({ ...data, name: e.target.value })} />
         <input placeholder="Email" value={data.email} onChange={e => setData({ ...data, email: e.target.value })} />
         <input type="password" placeholder="Mot de passe" value={data.password} onChange={e => setData({ ...data, password: e.target.value })} />
+        <input placeholder="Ville" value={data.city} onChange={e => setData({ ...data, city: e.target.value })} />
         <button disabled={loading}>{loading ? "⏳ Création..." : "Créer mon compte"}</button>
       </form>
     </div>
@@ -105,15 +105,29 @@ function LoginPage({ onLogin }) {
 }
 
 function ProfilePage({ user, onLogout }) {
-  if (!user)
-    return <div className="page"><p>Veuillez vous connecter</p></div>;
+  const [data, setData] = useState({ name: user?.name || "", city: user?.city || "", password: "" });
+  const [loading, setLoading] = useState(false);
+
+  const save = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.put("/profile", data);
+      alert(res.data.message);
+    } catch (e) {
+      alert(e.response?.data?.message || "Erreur mise à jour");
+    }
+    setLoading(false);
+  };
+
+  if (!user) return <div className="page"><p>Veuillez vous connecter</p></div>;
 
   return (
     <div className="page">
       <h2>👤 Profil</h2>
-      <p><b>Nom:</b> {user.name}</p>
-      <p><b>Email:</b> {user.email}</p>
-      <button className="edit-btn">Modifier profil</button>
+      <input value={data.name} onChange={e => setData({ ...data, name: e.target.value })} placeholder="Nom" />
+      <input value={data.city} onChange={e => setData({ ...data, city: e.target.value })} placeholder="Ville" />
+      <input type="password" value={data.password} onChange={e => setData({ ...data, password: e.target.value })} placeholder="Nouveau mot de passe" />
+      <button onClick={save} disabled={loading}>{loading ? "⏳ ..." : "Enregistrer"}</button>
       <button className="logout-btn" onClick={onLogout}>Déconnexion</button>
     </div>
   );
@@ -134,13 +148,13 @@ function AdminPage() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
-
   const del = async (id) => {
     if (!window.confirm("Supprimer cet utilisateur ?")) return;
     await axios.delete(`/admin/users/${id}`);
     load();
   };
+
+  useEffect(() => { load(); }, []);
 
   return (
     <div className="page">
@@ -148,9 +162,9 @@ function AdminPage() {
       <button onClick={load}>🔄 Actualiser</button>
       <p>Utilisateurs : {users.length}</p>
       {loading ? <p>Chargement...</p> : users.map(u => (
-        <div key={u.id} className="user-card">
-          <span>{u.name} - {u.email}</span>
-          <button className="delete-btn" onClick={() => del(u.id)}>🗑️ Supprimer</button>
+        <div key={u._id} className="user-card">
+          <span>{u.name} - {u.email} - {u.city}</span>
+          <button className="delete-btn" onClick={() => del(u._id)}>🗑️ Supprimer</button>
         </div>
       ))}
     </div>
